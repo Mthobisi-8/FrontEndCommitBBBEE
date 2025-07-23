@@ -19,7 +19,7 @@ const handleSubmit = async (e) => {
   setSuccess("");
 
   try {
-    const res = await fetch("backend-bbbee.vercel.app/login", {
+    const res = await fetch("backend-bbbee.vercel.app", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(formData),
