@@ -43,3 +43,4 @@ frontend/build/
 # Optional: OS-specific files
 .DS_Store  # macOS
 Thumbs.db  # Windows
+
