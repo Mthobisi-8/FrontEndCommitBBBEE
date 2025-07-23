@@ -92,7 +92,7 @@ const Home = () => {
       if (!idToken) {
         throw new Error("No authentication token found. Please log in again.");
       }
-      const response = await fetch(`http://localhost:5000/get-profile?uid=${uid}`, {
+      const response = await fetch(`backend-bbbee.vercel.app/get-profile?uid=${uid}`, {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
