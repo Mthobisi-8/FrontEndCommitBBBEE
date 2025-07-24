@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import logo from '../../assets/forge.png'
+import logo from '../../assets/forge.png';
+import { API_BASE_URL } from "../../config"; // ✅ Import base URL
 
 export default function AdminLogIn() {
   const [formData, setFormData] = useState({ businessEmail: "", password: "" });
@@ -21,14 +22,22 @@ export default function AdminLogIn() {
     setSuccess("");
 
     try {
-      console.log("Sending request to backend...");
-      const res = await fetch("http://localhost:5000/admin-login", {
+      // ✅ Check if backend is healthy first
+      console.log("Checking API health...");
+      const healthRes = await fetch(`${API_BASE_URL}/api/health`);
+      if (!healthRes.ok) throw new Error("Backend server is down. Please try again later.");
+      console.log("API is healthy");
+
+      // ✅ Send login request
+      console.log("Sending login request...");
+      const res = await fetch(`${API_BASE_URL}/admin-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-      console.log("Response received:", res.status);
+
       const data = await res.json();
+      console.log("Login response received:", data);
 
       if (!res.ok) throw new Error(data.error || "Something went wrong");
 
