@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import AdminNavBar from '../AdminNavBar';
 import { FaUsers, FaComments, FaChartLine, FaCog } from 'react-icons/fa';
+import { API_BASE_URL } from './config';
+import { fetchData } from './fetchData'; // Import fetchData
 
 // API Service Layer
 const apiService = {
   async fetchClients(token) {
-    const response = await fetch('http://localhost:5000/clients', {
+    const response = await fetch(`${API_BASE_URL}/clients`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
@@ -91,6 +93,10 @@ const AdminDashboard = () => {
           growthRate: parseFloat(growthRate.toFixed(1)),
           pendingActions,
         });
+
+        // Test fetchData
+        const healthData = await fetchData();
+        console.log('Health check:', healthData);
       } catch (error) {
         console.error('Error fetching stats:', error);
         setError(

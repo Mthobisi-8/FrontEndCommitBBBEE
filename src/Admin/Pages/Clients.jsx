@@ -2,41 +2,61 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import AdminNavBar from '../AdminNavBar';
 import { FaSearch, FaUserPlus, FaFilter, FaEdit, FaTrash, FaUserCircle } from 'react-icons/fa';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
+import { API_BASE_URL } from './config';
 
 // API Service Layer
 const apiService = {
   async fetchClients(token) {
-    const response = await fetch('http://localhost:5000/clients', {
+    const response = await fetch(`${API_BASE_URL}/clients`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Failed to fetch clients');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch clients');
+    }
     return response.json();
   },
 
   async saveClient(token, client, isUpdate = false) {
-    const url = isUpdate ? `http://localhost:5000/clients/${client.id}` : 'http://localhost:5000/clients';
+    const url = isUpdate ? `${API_BASE_URL}/clients/${client.id}` : `${API_BASE_URL}/clients`;
+    // Convert DD/MMM/YYYY to ISO format
+    const formattedClient = {
+      ...client,
+      financialYearEnd: client.financialYearEnd
+        ? format(parse(client.financialYearEnd, 'dd/MMM/yyyy', new Date()), 'yyyy-MM-dd')
+        : client.financialYearEnd,
+    };
     const response = await fetch(url, {
       method: isUpdate ? 'PUT' : 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(client),
+      body: JSON.stringify(formattedClient),
     });
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to save client');
     }
-    return response.json();
+    const savedClient = await response.json();
+    return {
+      ...savedClient,
+      financialYearEnd: savedClient.financialYearEnd
+        ? format(new Date(savedClient.financialYearEnd), 'dd/MMM/yyyy')
+        : savedClient.financialYearEnd,
+    };
   },
 
   async deleteClient(token, id) {
-    const response = await fetch(`http://localhost:5000/clients/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/clients/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Failed to delete client');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete client');
+    }
     return response;
   },
 };
@@ -64,7 +84,6 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
       status: 'Pending',
     });
   }, [client, reset]);
-
 
   return (
     isOpen && (
@@ -190,9 +209,7 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.businessEmail}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.contactNumber}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {format(new Date(client.financialYearEnd), 'dd/MMM/yyyy')}
-                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.financialYearEnd}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                     ${client.status === 'Active' ? 'bg-green-100 text-green-800' : 
@@ -249,7 +266,12 @@ const Clients = () => {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('No authentication token found');
         const data = await apiService.fetchClients(token);
-        setClients(data);
+        setClients(data.map(client => ({
+          ...client,
+          financialYearEnd: client.financialYearEnd
+            ? format(new Date(client.financialYearEnd), 'dd/MMM/yyyy')
+            : client.financialYearEnd,
+        })));
       } catch (error) {
         console.error('Error fetching clients:', error);
         setError(error.message === 'No authentication token found' ? 'Please log in to view clients' : 'Failed to load clients. Please try again.');
@@ -306,7 +328,7 @@ const Clients = () => {
 
   // Open modal
   const openModal = (client = null) => {
-    setSelectedClient(client ? { ...client, financialYearEnd: format(new Date(client.financialYearEnd), 'dd/MMM/yyyy') } : null);
+    setSelectedClient(client ? { ...client } : null);
     setShowModal(true);
   };
 
