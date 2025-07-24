@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import logo from '../../assets/forge.png'
-
+import { API_BASE_URL } from '../config'; // Import API_BASE_URL
+import logo from '../../assets/forge.png';
 
 export default function AdminSignUp() {
   const [formData, setFormData] = useState({
@@ -12,7 +12,33 @@ export default function AdminSignUp() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [admins, setAdmins] = useState([]); // State to store fetched admins
   const navigate = useNavigate();
+
+  // Fetch admins from database on component mount
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Function to fetch admin data
+  const fetchData = async () => {
+    try {
+      console.log("Fetching admins from:", `${API_BASE_URL}/api/admins`);
+      const response = await fetch(`${API_BASE_URL}/api/admins`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      console.log("Fetch response status:", response.status);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch admins: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log("Fetched admins:", data);
+      setAdmins(data); // Update state with fetched admins
+    } catch (err) {
+      console.error("Fetch error:", err.message);
+      setError(err.message);
+    }
+  };
 
   const handleChange = (e) => {
     console.log("Input changed:", { name: e.target.name, value: e.target.value });
@@ -28,8 +54,8 @@ export default function AdminSignUp() {
     setLoading(true);
 
     try {
-      console.log("Sending request to backend...");
-      const res = await fetch("http://localhost:5000/admin-signup", {
+      console.log("Sending signup request to:", `${API_BASE_URL}/admin-signup`);
+      const res = await fetch(`${API_BASE_URL}/admin-signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -74,6 +100,9 @@ export default function AdminSignUp() {
         contactNumber: "",
       });
 
+      // Refresh admin list after signup
+      await fetchData();
+
       // Navigate to AdminLogIn
       setTimeout(() => {
         navigate("/AdminLogIn", { state: { userData } });
@@ -88,12 +117,12 @@ export default function AdminSignUp() {
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-            <div className="flex justify-center mb-6">
-              <Link to='/LandingPage'>
-              <img src={logo} alt="Forge Logo" className="h-16" />
-              </Link>
-            </div>
-      
+      <div className="flex justify-center mb-6">
+        <Link to='/LandingPage'>
+          <img src={logo} alt="Forge Logo" className="h-16" />
+        </Link>
+      </div>
+
       <h2 className="text-2xl font-bold mb-6 text-center">Admin Sign Up</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -150,6 +179,24 @@ export default function AdminSignUp() {
       </form>
       {error && <p className="mt-4 text-red-500 text-center">{error}</p>}
       {success && <p className="mt-4 text-green-500 text-center">{success}</p>}
+
+      {/* Display fetched admins */}
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold mb-4">Registered Admins</h3>
+        {admins.length > 0 ? (
+          <ul className="space-y-2">
+            {admins.map((admin) => (
+              <li key={admin.uid} className="p-2 bg-gray-100 rounded">
+                <p><strong>Name:</strong> {admin.Employeename}</p>
+                <p><strong>Email:</strong> {admin.companymail}</p>
+                <p><strong>Contact:</strong> {admin.contactNumber}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-500">No admins found.</p>
+        )}
+      </div>
     </div>
   );
 }
