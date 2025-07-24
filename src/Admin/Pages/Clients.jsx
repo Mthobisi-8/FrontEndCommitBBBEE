@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import AdminNavBar from '../AdminNavBar';
 import { FaSearch, FaUserPlus, FaFilter, FaEdit, FaTrash, FaUserCircle } from 'react-icons/fa';
-import { format, parse } from 'date-fns';
-import { API_BASE_URL } from './config';
+import { format } from 'date-fns';
+import { API_BASE_URL } from '../config';
 
 // API Service Layer
 const apiService = {
@@ -12,7 +12,7 @@ const apiService = {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to fetch clients');
     }
     return response.json();
@@ -20,32 +20,19 @@ const apiService = {
 
   async saveClient(token, client, isUpdate = false) {
     const url = isUpdate ? `${API_BASE_URL}/clients/${client.id}` : `${API_BASE_URL}/clients`;
-    // Convert DD/MMM/YYYY to ISO format
-    const formattedClient = {
-      ...client,
-      financialYearEnd: client.financialYearEnd
-        ? format(parse(client.financialYearEnd, 'dd/MMM/yyyy', new Date()), 'yyyy-MM-dd')
-        : client.financialYearEnd,
-    };
     const response = await fetch(url, {
       method: isUpdate ? 'PUT' : 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(formattedClient),
+      body: JSON.stringify(client),
     });
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to save client');
     }
-    const savedClient = await response.json();
-    return {
-      ...savedClient,
-      financialYearEnd: savedClient.financialYearEnd
-        ? format(new Date(savedClient.financialYearEnd), 'dd/MMM/yyyy')
-        : savedClient.financialYearEnd,
-    };
+    return response.json();
   },
 
   async deleteClient(token, id) {
@@ -54,15 +41,23 @@ const apiService = {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to delete client');
     }
     return response;
   },
+
+  async fetchData() {
+    const response = await fetch(`${API_BASE_URL}/api/health`);
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.status}`);
+    }
+    return response.json();
+  },
 };
 
 // Client Form Modal Component
-const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
+const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error, saving }) => {
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     defaultValues: client || {
       businessName: '',
@@ -97,6 +92,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
               <input
                 {...register('businessName', { required: 'Business name is required' })}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               />
               {errors.businessName && <p className="text-red-500 text-sm">{errors.businessName.message}</p>}
             </div>
@@ -108,6 +104,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
                   pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
                 })}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               />
               {errors.businessEmail && <p className="text-red-500 text-sm">{errors.businessEmail.message}</p>}
             </div>
@@ -119,6 +116,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
                   pattern: { value: /^\+?\d{10,15}$/, message: 'Invalid phone number' },
                 })}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               />
               {errors.contactNumber && <p className="text-red-500 text-sm">{errors.contactNumber.message}</p>}
             </div>
@@ -133,6 +131,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
                   },
                 })}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               />
               {errors.financialYearEnd && <p className="text-red-500 text-sm">{errors.financialYearEnd.message}</p>}
             </div>
@@ -141,6 +140,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
               <input
                 {...register('address', { required: 'Address is required' })}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               />
               {errors.address && <p className="text-red-500 text-sm">{errors.address.message}</p>}
             </div>
@@ -149,6 +149,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
               <select
                 {...register('status')}
                 className="mt-1 block w-full border rounded-lg p-2"
+                disabled={saving}
               >
                 <option value="Pending">Pending</option>
                 <option value="Active">Active</option>
@@ -160,14 +161,16 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
                 type="button"
                 onClick={onClose}
                 className="px-4 py-2 bg-gray-200 rounded-lg"
+                disabled={saving}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                disabled={saving}
               >
-                {client ? 'Update' : 'Add'} Client
+                {saving ? 'Saving...' : client ? 'Update' : 'Add'} Client
               </button>
             </div>
           </form>
@@ -178,7 +181,7 @@ const ClientFormModal = ({ isOpen, onClose, client, onSubmit, error }) => {
 };
 
 // Client Table Component
-const ClientTable = ({ clients, onEdit, onDelete }) => (
+const ClientTable = ({ clients, onEdit, onDelete, deleting }) => (
   <div className="bg-white rounded-lg shadow overflow-hidden">
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
@@ -205,11 +208,13 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
                         <span className="text-xs text-gray-500">Reg: 2023/123456/07</span>
                       )}
                     </div>
-                  </div>
-                </td>
+                    </div>
+                  </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.businessEmail}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.contactNumber}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{client.financialYearEnd}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {format(new Date(client.financialYearEnd), 'dd/MMM/yyyy')}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                     ${client.status === 'Active' ? 'bg-green-100 text-green-800' : 
@@ -223,6 +228,7 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
                     onClick={() => onEdit(client)}
                     className="text-blue-600 hover:text-blue-900 mr-3"
                     aria-label={`Edit ${client.businessName}`}
+                    disabled={deleting}
                   >
                     <FaEdit />
                   </button>
@@ -230,8 +236,9 @@ const ClientTable = ({ clients, onEdit, onDelete }) => (
                     onClick={() => onDelete(client.id)}
                     className="text-red-600 hover:text-red-900"
                     aria-label={`Delete ${client.businessName}`}
+                    disabled={deleting}
                   >
-                    <FaTrash />
+                    {deleting ? <span className="animate-spin h-5 w-5">⌛</span> : <FaTrash />}
                   </button>
                 </td>
               </tr>
@@ -257,29 +264,41 @@ const Clients = () => {
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [healthStatus, setHealthStatus] = useState(null);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Fetch clients
+  // Fetch clients and health status
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchClientsAndHealth = async () => {
       setIsLoading(true);
+      setLoadingHealth(true);
       try {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('No authentication token found');
+
+        // Fetch clients
         const data = await apiService.fetchClients(token);
-        setClients(data.map(client => ({
-          ...client,
-          financialYearEnd: client.financialYearEnd
-            ? format(new Date(client.financialYearEnd), 'dd/MMM/yyyy')
-            : client.financialYearEnd,
-        })));
+        setClients(data);
+
+        // Fetch backend health
+        const healthData = await apiService.fetchData();
+        console.log('Backend health:', healthData);
+        setHealthStatus(healthData);
       } catch (error) {
-        console.error('Error fetching clients:', error);
-        setError(error.message === 'No authentication token found' ? 'Please log in to view clients' : 'Failed to load clients. Please try again.');
+        console.error('Error fetching data:', error);
+        setError(
+          error.message === 'No authentication token found'
+            ? 'Please log in to view clients'
+            : `Failed to load data: ${error.message}`
+        );
       } finally {
         setIsLoading(false);
+        setLoadingHealth(false);
       }
     };
-    fetchClients();
+    fetchClientsAndHealth();
   }, []);
 
   // Filter clients (memoized)
@@ -292,10 +311,20 @@ const Clients = () => {
 
   // Handle form submission
   const handleSubmit = async (data) => {
+    setSaving(true);
+    setError('');
     try {
       const token = localStorage.getItem('authToken');
       if (!token) throw new Error('No authentication token found');
-      const savedClient = await apiService.saveClient(token, data, !!selectedClient);
+      
+      // Convert DD/MMM/YYYY to ISO date
+      const [day, month, year] = data.financialYearEnd.split('/');
+      const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(month);
+      if (monthIndex === -1) throw new Error('Invalid month format');
+      const isoDate = new Date(year, monthIndex, day).toISOString();
+      const clientData = { ...data, financialYearEnd: isoDate };
+
+      const savedClient = await apiService.saveClient(token, clientData, !!selectedClient);
       setClients(prev => 
         selectedClient 
           ? prev.map(c => c.id === savedClient.id ? savedClient : c)
@@ -305,15 +334,21 @@ const Clients = () => {
       setSelectedClient(null);
     } catch (error) {
       console.error('Error saving client:', error);
-      setError(error.message === 'No authentication token found' 
-        ? 'Please log in to save clients' 
-        : error.message || 'Failed to save client. Please try again.');
+      setError(
+        error.message === 'No authentication token found'
+          ? 'Please log in to save clients'
+          : error.message || 'Failed to save client. Please try again.'
+      );
+    } finally {
+      setSaving(false);
     }
   };
-  
+
   // Handle delete
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this client?')) {
+      setDeleting(true);
+      setError('');
       try {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('No authentication token found');
@@ -321,14 +356,21 @@ const Clients = () => {
         setClients(prev => prev.filter(client => client.id !== id));
       } catch (error) {
         console.error('Error deleting client:', error);
-        setError('Failed to delete client. Please try again.');
+        setError(
+          error.message === 'No authentication token found'
+            ? 'Please log in to delete clients'
+            : 'Failed to delete client. Please try again.'
+        );
+      } finally {
+        setDeleting(false);
       }
     }
   };
 
   // Open modal
   const openModal = (client = null) => {
-    setSelectedClient(client ? { ...client } : null);
+    setError(''); // Clear error when opening modal
+    setSelectedClient(client ? { ...client, financialYearEnd: format(new Date(client.financialYearEnd), 'dd/MMM/yyyy') } : null);
     setShowModal(true);
   };
 
@@ -341,10 +383,22 @@ const Clients = () => {
           <button
             onClick={() => openModal()}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center"
+            disabled={saving || deleting}
           >
             <FaUserPlus className="mr-2" /> Add New Client
           </button>
         </div>
+
+        {/* Health Status Display */}
+        {loadingHealth ? (
+          <p className="text-yellow-500 mb-4">Checking backend status...</p>
+        ) : healthStatus ? (
+          <p className="text-green-500 mb-4">
+            Backend Status: {healthStatus.message} ({healthStatus.status})
+          </p>
+        ) : (
+          <p className="text-red-500 mb-4">Failed to check backend status</p>
+        )}
 
         {/* Search and Filter Bar */}
         <div className="bg-white p-4 rounded-lg shadow mb-6 flex flex-col md:flex-row gap-4">
@@ -357,9 +411,13 @@ const Clients = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               aria-label="Search clients"
+              disabled={saving || deleting}
             />
           </div>
-          <button className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+          <button
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+            disabled={saving || deleting}
+          >
             <FaFilter /> Filters
           </button>
         </div>
@@ -377,6 +435,7 @@ const Clients = () => {
             clients={filteredClients}
             onEdit={openModal}
             onDelete={handleDelete}
+            deleting={deleting}
           />
         )}
 
@@ -386,10 +445,12 @@ const Clients = () => {
           onClose={() => {
             setShowModal(false);
             setSelectedClient(null);
+            setError('');
           }}
           client={selectedClient}
           onSubmit={handleSubmit}
           error={error}
+          saving={saving}
         />
       </div>
     </div>

@@ -1,18 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import AdminNavBar from '../AdminNavBar';
 import { FaUsers, FaComments, FaChartLine, FaCog } from 'react-icons/fa';
-import { API_BASE_URL } from './config';
-import { fetchData } from './fetchData'; // Import fetchData
+import { API_BASE_URL } from '../config'; // Import API_BASE_URL
 
 // API Service Layer
 const apiService = {
   async fetchClients(token) {
     const response = await fetch(`${API_BASE_URL}/clients`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
     });
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to fetch clients');
+    }
+    return response.json();
+  },
+  async fetchData() {
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`Health check failed: ${response.status}`);
     }
     return response.json();
   },
@@ -27,10 +38,13 @@ const AdminDashboard = () => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [healthStatus, setHealthStatus] = useState(null); // State for backend health
+  const [loadingHealth, setLoadingHealth] = useState(false); // State for health check loading
 
   useEffect(() => {
     const fetchStats = async () => {
       setIsLoading(true);
+      setLoadingHealth(true);
       try {
         const token = localStorage.getItem('authToken');
         if (!token) throw new Error('No authentication token found');
@@ -94,18 +108,20 @@ const AdminDashboard = () => {
           pendingActions,
         });
 
-        // Test fetchData
-        const healthData = await fetchData();
-        console.log('Health check:', healthData);
+        // Fetch backend health
+        const healthData = await apiService.fetchData();
+        console.log('Backend health:', healthData);
+        setHealthStatus(healthData);
       } catch (error) {
         console.error('Error fetching stats:', error);
         setError(
           error.message === 'No authentication token found'
             ? 'Please log in to view dashboard'
-            : 'Failed to load dashboard data. Please try again.'
+            : `Failed to load dashboard data: ${error.message}`
         );
       } finally {
         setIsLoading(false);
+        setLoadingHealth(false);
       }
     };
 
@@ -117,6 +133,17 @@ const AdminDashboard = () => {
       <AdminNavBar />
       <div className="p-6">
         <h2 className="text-2xl font-bold mb-6">Admin Portal Overview</h2>
+
+        {/* Health Status Display */}
+        {loadingHealth ? (
+          <p className="text-yellow-500 mb-4">Checking backend status...</p>
+        ) : healthStatus ? (
+          <p className="text-green-500 mb-4">
+            Backend Status: {healthStatus.message} ({healthStatus.status})
+          </p>
+        ) : (
+          <p className="text-red-500 mb-4">Failed to check backend status</p>
+        )}
 
         {/* Error Display */}
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
