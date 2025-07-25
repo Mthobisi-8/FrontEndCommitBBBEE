@@ -3,7 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/forge.png';
 import { API_BASE_URL } from '../../config';
 
-// API Service Layer//
+// Debug: Check if API base URL is loading
+console.log("API_BASE_URL from config:", API_BASE_URL);
+
+// API Service Layer
 const apiService = {
   async checkHealth() {
     const response = await fetch(`${API_BASE_URL}/api/health`);
@@ -50,7 +53,6 @@ export default function AdminLogIn() {
   const [loadingHealth, setLoadingHealth] = useState(false);
   const navigate = useNavigate();
 
-  // Check backend health on mount
   useEffect(() => {
     const checkHealth = async () => {
       setLoadingHealth(true);
@@ -70,41 +72,34 @@ export default function AdminLogIn() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    console.log(`Input changed: ${name} = ${value}`);
     setFormData((prev) => ({ ...prev, [name]: value }));
     setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Submit clicked!', formData);
     setError('');
     setSuccess('');
     setIsLoading(true);
 
     try {
-      // Login request
-      console.log('Sending login request...');
       const loginData = await apiService.login(formData);
-      console.log('Login response received:', loginData);
 
-      // Store JWT, uid, and businessEmail in localStorage
+      // Save credentials
       if (loginData.token && loginData.uid) {
         localStorage.setItem('authToken', loginData.token);
         localStorage.setItem('uid', loginData.uid);
         localStorage.setItem('businessEmail', loginData.businessEmail);
-        console.log('Stored authToken, uid, and businessEmail in localStorage');
       } else {
         throw new Error('Token or uid missing in response');
       }
 
-      // Fetch admins to verify admin status
-      console.log('Fetching admins...');
+      // Validate admin access
       const adminsData = await apiService.fetchAdmins(loginData.token);
-      console.log('Admins:', adminsData);
-
-      // Verify if the logged-in user is an admin
-      const isAdmin = adminsData.some(admin => admin.uid === loginData.uid || admin.businessEmail === loginData.businessEmail);
+      const isAdmin = adminsData.some(
+        (admin) =>
+          admin.uid === loginData.uid || admin.businessEmail === loginData.businessEmail
+      );
       if (!isAdmin) {
         throw new Error('You are not authorized as an admin');
       }
@@ -122,7 +117,7 @@ export default function AdminLogIn() {
         },
       });
     } catch (err) {
-      console.error('Error:', err.message);
+      console.error('Login Error:', err.message);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -137,7 +132,8 @@ export default function AdminLogIn() {
         </Link>
       </div>
       <h2 className="text-2xl font-bold mb-6 text-center">Admin Log In</h2>
-      {/* Health Status Display */}
+
+      {/* Health check display */}
       {loadingHealth ? (
         <p className="text-yellow-500 mb-4 text-center">Checking backend status...</p>
       ) : healthStatus ? (
@@ -147,6 +143,7 @@ export default function AdminLogIn() {
       ) : (
         <p className="text-red-500 mb-4 text-center">Failed to check backend status</p>
       )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="email"
@@ -186,6 +183,7 @@ export default function AdminLogIn() {
           </Link>
         </p>
       </form>
+
       {error && <p className="mt-4 text-red-500 text-center">{error}</p>}
       {success && <p className="mt-4 text-green-500 text-center">{success}</p>}
     </div>
