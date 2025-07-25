@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import AdminNavBar from '../AdminNavBar';
 import { FaSearch, FaUserPlus, FaFilter, FaEdit, FaTrash, FaUserCircle } from 'react-icons/fa';
 import { format } from 'date-fns';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL } from '../../config';
 
 // API Service Layer
 const apiService = {

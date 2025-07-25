@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from '../../assets/forge.png';
-import { API_BASE_URL } from "../config"; // ✅ Import base URL
+import { API_BASE_URL } from "../../config"; // ✅ Import base URL
 
 export default function AdminLogIn() {
   const [formData, setFormData] = useState({ businessEmail: "", password: "" });

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminNavBar from '../AdminNavBar';
 import { FaUsers, FaComments, FaChartLine, FaCog } from 'react-icons/fa';
-import { API_BASE_URL } from '../config'; // Import API_BASE_URL
+import { API_BASE_URL } from '../../config'; // Import API_BASE_URL
 
 // API Service Layer
 const apiService = {
