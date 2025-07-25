@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { API_BASE_URL } from '../../config'; // Import API_BASE_URL
+import { API_BASE_URL } from '../config'; // Import API_BASE_URL
 import logo from '../../assets/forge.png';
 
 export default function AdminSignUp() {
