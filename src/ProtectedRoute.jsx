@@ -17,11 +17,14 @@ export default function ProtectedRoute() {
         }
 
         console.log("ProtectedRoute: Sending request to /verify-admin");
-        const response = await fetch("http://localhost:5000/verify-admin", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          "https://backend-bbbee.vercel.app/verifyAdmin", // Update to Vercel URL
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         console.log("ProtectedRoute: Response received:", response.status);
         const data = await response.json();
