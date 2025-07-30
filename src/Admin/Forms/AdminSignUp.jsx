@@ -1,202 +1,270 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { API_BASE_URL } from '../../config'; 
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/forge.png';
+import { API_BASE_URL } from '../../config';
 
-export default function AdminSignUp() {
-  const [formData, setFormData] = useState({
-    companymail: "",
-    Employeename: "",
-    contactNumber: "",
-  });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [admins, setAdmins] = useState([]); // State to store fetched admins
+// Debug: Check API base URL
+console.log('API_BASE_URL from config:', API_BASE_URL);
+
+// API Service Layer
+const apiService = {
+  async checkHealth() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/health`);
+      if (!response.ok) {
+        throw new Error(`Health check failed: ${response.status}`);
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Health check error:', error.message);
+      throw error;
+    }
+  },
+
+  async login(credentials) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+      console.log('Login response:', data); // Debug
+      return data;
+    } catch (error) {
+      console.error('Login error:', error.message);
+      throw error;
+    }
+  },
+
+  async refreshToken(token) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Token refresh failed');
+      }
+      console.log('Refresh token response:', data); // Debug
+      return data.token;
+    } catch (error) {
+      console.error('Refresh token error:', error.message);
+      throw error;
+    }
+  },
+
+  async fetchAdmins(token) {
+    try {
+      console.log('Using token for /api/admins:', token); // Debug
+      const response = await fetch(`${API_BASE_URL}/api/admins`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.log('Fetch admins response status:', response.status, data); // Debug
+        throw new Error(`Fetch admins failed: ${response.status}`);
+      }
+      console.log('Admins data:', data); // Debug
+      return data;
+    } catch (error) {
+      console.error('Fetch admins error:', error.message);
+      throw error;
+    }
+  },
+};
+
+export default function AdminLogIn() {
+  const [formData, setFormData] = useState({ businessEmail: '', password: '' });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [healthStatus, setHealthStatus] = useState(null);
+  const [loadingHealth, setLoadingHealth] = useState(false);
   const navigate = useNavigate();
 
-  // Fetch admins from database on component mount
   useEffect(() => {
-    fetchData();
+    // Check backend health and token validity on mount
+    const initialize = async () => {
+      setLoadingHealth(true);
+      try {
+        const healthData = await apiService.checkHealth();
+        console.log('Backend health:', healthData);
+        setHealthStatus(healthData);
+
+        // Check if existing token is valid
+        const token = localStorage.getItem('adminToken');
+        if (token) {
+          try {
+            await apiService.fetchAdmins(token);
+            console.log('Existing token is valid');
+          } catch (err) {
+            console.warn('Existing token invalid, clearing:', err.message);
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('uid');
+            localStorage.removeItem('businessEmail');
+          }
+        }
+      } catch (err) {
+        console.error('Health check error:', err.message);
+        setError('Failed to connect to backend');
+      } finally {
+        setLoadingHealth(false);
+      }
+    };
+    initialize();
   }, []);
 
-  // Function to fetch admin data
-  const fetchData = async () => {
-    try {
-      console.log("Fetching admins from:", `${API_BASE_URL}/api/admins`);
-      const response = await fetch(`${API_BASE_URL}/api/admins`, {
-        headers: { "Content-Type": "application/json" },
-      });
-      console.log("Fetch response status:", response.status);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch admins: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log("Fetched admins:", data);
-      setAdmins(data); // Update state with fetched admins
-    } catch (err) {
-      console.error("Fetch error:", err.message);
-      setError(err.message);
-    }
-  };
-
   const handleChange = (e) => {
-    console.log("Input changed:", { name: e.target.name, value: e.target.value });
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Submit clicked!", formData);
-    console.log("Form data being sent:", JSON.stringify(formData));
-    setError("");
-    setSuccess("");
-    setLoading(true);
+    setError('');
+    setSuccess('');
+    setIsLoading(true);
 
     try {
-      console.log("Sending signup request to:", `${API_BASE_URL}/admin-signup`);
-      const res = await fetch(`${API_BASE_URL}/admin-signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-      console.log("Response received:", res.status);
+      const loginData = await apiService.login(formData);
+      console.log('Storing token:', loginData.token); // Debug
+      if (loginData.token && loginData.uid) {
+        localStorage.setItem('adminToken', loginData.token);
+        localStorage.setItem('uid', loginData.uid);
+        localStorage.setItem('businessEmail', loginData.businessEmail);
+      } else {
+        throw new Error('Token or uid missing in response');
+      }
 
-      // Log response text for debugging
-      const text = await res.text();
-      console.log("Response text:", text);
-
-      // Try parsing as JSON
-      let data;
+      // Attempt to fetch admins with the new token
       try {
-        data = JSON.parse(text);
-      } catch (parseError) {
-        console.error("JSON parse error:", parseError.message);
-        throw new Error("Server returned invalid JSON response");
+        const adminsData = await apiService.fetchAdmins(loginData.token);
+        setSuccess(loginData.message || 'Login successful');
+        navigate('/AdminDashboard', {
+          state: {
+            userData: {
+              uid: loginData.uid,
+              businessName: loginData.businessName,
+              businessEmail: loginData.businessEmail,
+              contactNumber: loginData.contactNumber,
+            },
+            admins: adminsData.admins,
+          },
+        });
+      } catch (err) {
+        if (err.message.includes('401')) {
+          // Try refreshing the token
+          try {
+            const newToken = await apiService.refreshToken(loginData.token);
+            localStorage.setItem('adminToken', newToken);
+            const adminsData = await apiService.fetchAdmins(newToken);
+            setSuccess(loginData.message || 'Login successful');
+            navigate('/AdminDashboard', {
+              state: {
+                userData: {
+                  uid: loginData.uid,
+                  businessName: loginData.businessName,
+                  businessEmail: loginData.businessEmail,
+                  contactNumber: loginData.contactNumber,
+                },
+                admins: adminsData.admins,
+              },
+            });
+          // eslint-disable-next-line no-unused-vars
+          } catch (refreshErr) {
+            throw new Error('Authentication failed: Please log in again');
+          }
+        } else {
+          throw err;
+        }
       }
-
-      if (!res.ok) {
-        console.error("Server error response:", data);
-        throw new Error(data.error || `Server error: ${res.status}`);
-      }
-
-      console.log("Raw data from backend:", data);
-      setSuccess(data.message);
-
-      const userData = {
-        uid: data.uid,
-        Employeename: data.Employeename,
-        companymail: data.companymail,
-        contactNumber: data.contactNumber,
-      };
-      console.log("userData being passed to Login:", userData);
-
-      localStorage.setItem("userId", data.uid);
-
-      // Reset form data
-      setFormData({
-        companymail: "",
-        Employeename: "",
-        contactNumber: "",
-      });
-
-      // Refresh admin list after signup
-      await fetchData();
-
-      // Navigate to AdminLogIn
-      setTimeout(() => {
-        navigate("/AdminLogIn", { state: { userData } });
-      }, 2000);
     } catch (err) {
-      console.error("Error:", err.message);
-      setError(err.message);
+      console.error('Login Error:', err.message);
+      if (err.message.includes('401')) {
+        setError('Authentication failed: Invalid email or password');
+      } else if (err.message.includes('403')) {
+        setError('Access denied: User is not an admin');
+      } else {
+        setError(err.message || 'Login failed');
+      }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
       <div className="flex justify-center mb-6">
-        <Link to='/LandingPage'>
+        <Link to="/LandingPage">
           <img src={logo} alt="Forge Logo" className="h-16" />
         </Link>
       </div>
+      <h2 className="text-2xl font-bold mb-6 text-center">Admin Log In</h2>
 
-      <h2 className="text-2xl font-bold mb-6 text-center">Admin Sign Up</h2>
+      {/* Health check display */}
+      {loadingHealth ? (
+        <p className="text-yellow-500 mb-4 text-center">Checking backend status...</p>
+      ) : healthStatus ? (
+        <p className="text-green-500 mb-4 text-center">
+          Backend Status: {healthStatus.message} ({healthStatus.status})
+        </p>
+      ) : (
+        <p className="text-red-500 mb-4 text-center">Failed to check backend status</p>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Company Email</label>
-          <input
-            type="email"
-            name="companymail"
-            placeholder="Company Email"
-            value={formData.companymail}
-            onChange={handleChange}
-            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
-            required
-            disabled={loading}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Employee Name</label>
-          <input
-            type="text"
-            name="Employeename"
-            placeholder="Employee Name"
-            value={formData.Employeename}
-            onChange={handleChange}
-            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
-            required
-            disabled={loading}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Contact Number</label>
-          <input
-            type="tel"
-            name="contactNumber"
-            placeholder="Contact Number (e.g., +27123456789)"
-            value={formData.contactNumber}
-            onChange={handleChange}
-            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
-            required
-            disabled={loading}
-          />
-        </div>
+        <input
+          type="email"
+          name="businessEmail"
+          placeholder="Business Email"
+          value={formData.businessEmail}
+          onChange={handleChange}
+          className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
+          required
+          autoComplete="email"
+          disabled={isLoading}
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
+          required
+          autoComplete="current-password"
+          disabled={isLoading}
+        />
         <button
           type="submit"
           className={`w-full p-2 text-white rounded ${
-            loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
           }`}
-          disabled={loading}
+          disabled={isLoading}
         >
-          {loading ? "Signing Up..." : "Sign Up"}
+          {isLoading ? 'Logging In...' : 'Log In'}
         </button>
         <p className="text-center">
-          Already have an account? <Link to="/AdminLogIn" className="text-blue-600 hover:underline">Log In</Link>
+          Don’t have an account?{' '}
+          <Link to="/AdminSignUp" className="text-blue-600 hover:underline">
+            Sign Up
+          </Link>
         </p>
       </form>
+
       {error && <p className="mt-4 text-red-500 text-center">{error}</p>}
       {success && <p className="mt-4 text-green-500 text-center">{success}</p>}
-
-      {/* Display fetched admins */}
-      <div className="mt-6">
-        <h3 className="text-xl font-semibold mb-4">Registered Admins</h3>
-        {admins.length > 0 ? (
-          <ul className="space-y-2">
-            {admins.map((admin) => (
-              <li key={admin.uid} className="p-2 bg-gray-100 rounded">
-                <p><strong>Name:</strong> {admin.Employeename}</p>
-                <p><strong>Email:</strong> {admin.companymail}</p>
-                <p><strong>Contact:</strong> {admin.contactNumber}</p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-500">No admins found.</p>
-        )}
-      </div>
     </div>
   );
 }
