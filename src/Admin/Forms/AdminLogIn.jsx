@@ -103,7 +103,8 @@ export default function AdminLogIn() {
 
       // Save credentials
       if (loginData.token && loginData.uid) {
-        localStorage.setItem('adminToken', loginData.token); // Consistent key
+        console.log('Storing token:', loginData.token);
+        localStorage.setItem('adminToken', loginData.token); // Consistent key       
         localStorage.setItem('uid', loginData.uid);
         localStorage.setItem('businessEmail', loginData.businessEmail);
       } else {
