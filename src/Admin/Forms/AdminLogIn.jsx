@@ -32,6 +32,7 @@ const apiService = {
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
       }
+      console.log('Login response:', data); // Debug
       return data;
     } catch (error) {
       console.error('Login error:', error.message);
@@ -39,8 +40,28 @@ const apiService = {
     }
   },
 
+  async refreshToken(token) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Token refresh failed');
+      }
+      console.log('Refresh token response:', data); // Debug
+      return data.token;
+    } catch (error) {
+      console.error('Refresh token error:', error.message);
+      throw error;
+    }
+  },
+
   async fetchAdmins(token) {
     try {
+      console.log('Using token for /api/admins:', token); // Debug
       const response = await fetch(`${API_BASE_URL}/api/admins`, {
         method: 'GET',
         headers: {
@@ -50,8 +71,10 @@ const apiService = {
       });
       const data = await response.json();
       if (!response.ok) {
+        console.log('Fetch admins response status:', response.status, data); // Debug
         throw new Error(`Fetch admins failed: ${response.status}`);
       }
+      console.log('Admins data:', data); // Debug
       return data;
     } catch (error) {
       console.error('Fetch admins error:', error.message);
@@ -70,12 +93,27 @@ export default function AdminLogIn() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkHealth = async () => {
+    // Check backend health and token validity on mount
+    const initialize = async () => {
       setLoadingHealth(true);
       try {
         const healthData = await apiService.checkHealth();
         console.log('Backend health:', healthData);
         setHealthStatus(healthData);
+
+        // Check if existing token is valid
+        const token = localStorage.getItem('adminToken');
+        if (token) {
+          try {
+            await apiService.fetchAdmins(token);
+            console.log('Existing token is valid');
+          } catch (err) {
+            console.warn('Existing token invalid, clearing:', err.message);
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('uid');
+            localStorage.removeItem('businessEmail');
+          }
+        }
       } catch (err) {
         console.error('Health check error:', err.message);
         setError('Failed to connect to backend');
@@ -83,7 +121,7 @@ export default function AdminLogIn() {
         setLoadingHealth(false);
       }
     };
-    checkHealth();
+    initialize();
   }, []);
 
   const handleChange = (e) => {
@@ -100,36 +138,66 @@ export default function AdminLogIn() {
 
     try {
       const loginData = await apiService.login(formData);
-
-      // Save credentials
+      console.log('Storing token:', loginData.token); // Debug
       if (loginData.token && loginData.uid) {
-        console.log('Storing token:', loginData.token);
-        localStorage.setItem('adminToken', loginData.token); // Consistent key       
+        localStorage.setItem('adminToken', loginData.token);
         localStorage.setItem('uid', loginData.uid);
         localStorage.setItem('businessEmail', loginData.businessEmail);
       } else {
         throw new Error('Token or uid missing in response');
       }
 
-      // Fetch admins to validate access
-      const adminsData = await apiService.fetchAdmins(loginData.token);
-      console.log('Admins data:', adminsData);
-
-      setSuccess(loginData.message || 'Login successful');
-      navigate('/AdminDashboard', {
-        state: {
-          userData: {
-            uid: loginData.uid,
-            businessName: loginData.businessName,
-            businessEmail: loginData.businessEmail,
-            contactNumber: loginData.contactNumber,
+      // Attempt to fetch admins with the new token
+      try {
+        const adminsData = await apiService.fetchAdmins(loginData.token);
+        setSuccess(loginData.message || 'Login successful');
+        navigate('/AdminDashboard', {
+          state: {
+            userData: {
+              uid: loginData.uid,
+              businessName: loginData.businessName,
+              businessEmail: loginData.businessEmail,
+              contactNumber: loginData.contactNumber,
+            },
+            admins: adminsData.admins,
           },
-          admins: adminsData.admins, // Use admins array from response
-        },
-      });
+        });
+      } catch (err) {
+        if (err.message.includes('401')) {
+          // Try refreshing the token
+          try {
+            const newToken = await apiService.refreshToken(loginData.token);
+            localStorage.setItem('adminToken', newToken);
+            const adminsData = await apiService.fetchAdmins(newToken);
+            setSuccess(loginData.message || 'Login successful');
+            navigate('/AdminDashboard', {
+              state: {
+                userData: {
+                  uid: loginData.uid,
+                  businessName: loginData.businessName,
+                  businessEmail: loginData.businessEmail,
+                  contactNumber: loginData.contactNumber,
+                },
+                admins: adminsData.admins,
+              },
+            });
+          // eslint-disable-next-line no-unused-vars
+          } catch (refreshErr) {
+            throw new Error('Authentication failed: Please log in again');
+          }
+        } else {
+          throw err;
+        }
+      }
     } catch (err) {
       console.error('Login Error:', err.message);
-      setError(err.message);
+      if (err.message.includes('401')) {
+        setError('Authentication failed: Invalid email or password');
+      } else if (err.message.includes('403')) {
+        setError('Access denied: User is not an admin');
+      } else {
+        setError(err.message || 'Login failed');
+      }
     } finally {
       setIsLoading(false);
     }
