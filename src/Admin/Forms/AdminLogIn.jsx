@@ -3,44 +3,60 @@ import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/forge.png';
 import { API_BASE_URL } from '../../config';
 
-// Debug: Check if API base URL is loading
-console.log("API_BASE_URL from config:", API_BASE_URL);
+// Debug: Check API base URL
+console.log('API_BASE_URL from config:', API_BASE_URL);
 
 // API Service Layer
 const apiService = {
   async checkHealth() {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.status}`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/health`);
+      if (!response.ok) {
+        throw new Error(`Health check failed: ${response.status}`);
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Health check error:', error.message);
+      throw error;
     }
-    return response.json();
   },
 
   async login(credentials) {
-    const response = await fetch(`${API_BASE_URL}/admin-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Something went wrong');
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+      return data;
+    } catch (error) {
+      console.error('Login error:', error.message);
+      throw error;
     }
-    return response.json();
   },
 
   async fetchAdmins(token) {
-    const response = await fetch(`${API_BASE_URL}/api/admins`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`Fetch admins failed: ${response.status}`);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admins`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`Fetch admins failed: ${response.status}`);
+      }
+      return data;
+    } catch (error) {
+      console.error('Fetch admins error:', error.message);
+      throw error;
     }
-    return response.json();
   },
 };
 
@@ -87,22 +103,16 @@ export default function AdminLogIn() {
 
       // Save credentials
       if (loginData.token && loginData.uid) {
-        localStorage.setItem('authToken', loginData.token);
+        localStorage.setItem('adminToken', loginData.token); // Consistent key
         localStorage.setItem('uid', loginData.uid);
         localStorage.setItem('businessEmail', loginData.businessEmail);
       } else {
         throw new Error('Token or uid missing in response');
       }
 
-      // Validate admin access
+      // Fetch admins to validate access
       const adminsData = await apiService.fetchAdmins(loginData.token);
-      const isAdmin = adminsData.some(
-        (admin) =>
-          admin.uid === loginData.uid || admin.businessEmail === loginData.businessEmail
-      );
-      if (!isAdmin) {
-        throw new Error('You are not authorized as an admin');
-      }
+      console.log('Admins data:', adminsData);
 
       setSuccess(loginData.message || 'Login successful');
       navigate('/AdminDashboard', {
@@ -113,7 +123,7 @@ export default function AdminLogIn() {
             businessEmail: loginData.businessEmail,
             contactNumber: loginData.contactNumber,
           },
-          admins: adminsData,
+          admins: adminsData.admins, // Use admins array from response
         },
       });
     } catch (err) {
